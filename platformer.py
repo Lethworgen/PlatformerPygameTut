@@ -1,6 +1,6 @@
 import pygame
 from pygame.locals import *
-import sys
+import sys, random
 
 # Initialize pygame
 pygame.init()
@@ -23,23 +23,21 @@ pygame.display.set_caption("Screen Warp Demo")
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
+        # self.image = pygame.image.load("character.png")
         self.surf = pygame.Surface((30, 30))
-        self.surf.fill((128, 255, 40))
-#        self.rect = self.surf.get_rect(center=(10, 420))
+        self.surf.fill((255, 255, 0))
         self.rect = self.surf.get_rect()
 
-        """
-        vec is simply used to create variables with two dimensions.
-        Creating 2D vectors allows us to keep things simpler.
-        """
-        self.pos = vec((10, 385))
+        self.pos = vec((10, 360))
         self.vel = vec(0, 0)
         self.acc = vec(0, 0)
+        self.jumping = False
 
     def move(self):
-        self.acc = vec(0, 0)
+        self.acc = vec(0, 0.5)
 
         pressed_keys = pygame.key.get_pressed()
+
         if pressed_keys[K_LEFT]:
             self.acc.x = -ACC
         if pressed_keys[K_RIGHT]:
@@ -49,7 +47,6 @@ class Player(pygame.sprite.Sprite):
         self.vel += self.acc
         self.pos += self.vel + 0.5 * self.acc
 
-        # Screen Warping
         if self.pos.x > WIDTH:
             self.pos.x = 0
         if self.pos.x < 0:
@@ -57,36 +54,117 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.midbottom = self.pos
 
+    def jump(self):
+        hits = pygame.sprite.spritecollide(self, platforms, False)
+        if hits:
+            self.jumping = True
+            self.vel.y = -15
+
+    def cancel_jump(self):
+        if self.jumping:
+            if self.vel.y < -3:
+                self.vel.y = -3
+
+    def update(self):
+        hits = pygame.sprite.spritecollide(P1, platforms, False)
+        if P1.vel.y > 0:
+            if hits:
+                if self.pos.y < hits[0].rect.bottom:
+                    self.pos.y = hits[0].rect.top + 1
+                    self.vel.y = 0
+                    self.jumping = False
+
 
 class Platform(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.surf = pygame.Surface((WIDTH, 20))
-        self.surf.fill((255, 0, 0))
-        self.rect = self.surf.get_rect(center = (WIDTH/2, HEIGHT - 10))
+        self.surf = pygame.Surface((random.randint(50,100), 12))
+        self.surf.fill((0, 255, 0))
+        self.rect = self.surf.get_rect(center=(random.randint(0, WIDTH-10), random.randint(0, HEIGHT-30)))
+
+    def move(self):
+        pass
 
 
+def check(platform, groupies):
+    if pygame.sprite.spritecollideany(platform, groupies):
+        return True
+    else:
+        for entity in groupies:
+            if entity == platform:
+                continue
+            if (abs(platform.rect.top - entity.rect.bottom) < 40) and (
+                    abs(platform.rect.bottom - entity.rect.top) < 40):
+                return True
+        C = False
+
+
+def plat_gen():
+    while len(platforms) < 6:
+        width = random.randrange(50, 100)
+        p = Platform()
+        C = True
+
+        while C:
+            p = Platform()
+            p.rect.center = (random.randrange(0, WIDTH - width),
+                             random.randrange(-50, 0))
+            C = check(p, platforms)
+        platforms.add(p)
+        all_sprites.add(p)
+
+
+# Sprites Groups
 PT1 = Platform()
 P1 = Player()
 
-# Sprites Groups
+PT1.surf = pygame.Surface((WIDTH, 20))
+PT1.surf.fill((255, 0, 0))
+PT1.rect = PT1.surf.get_rect(center=(WIDTH / 2, HEIGHT - 10))
+
 all_sprites = pygame.sprite.Group()
 all_sprites.add(PT1)
 all_sprites.add(P1)
 
+platforms = pygame.sprite.Group()
+platforms.add(PT1)
+
+for x in range(random.randint(4,5)):
+    C = True
+    pl = Platform()
+    while C:
+        pl = Platform()
+        C = check(pl, platforms)
+    platforms.add(pl)
+    all_sprites.add(pl)
+
 # Game Loop
 while True:
-    pygame.display.update()
+    P1.update()
     for event in pygame.event.get():
         if event.type == QUIT:
             pygame.quit()
             sys.exit()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                P1.jump()
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_SPACE:
+                P1.cancel_jump()
 
+    if P1.rect.top <= HEIGHT / 3:
+        P1.pos.y += abs(P1.vel.y)
+        for plat in platforms:
+            plat.rect.y += abs(P1.vel.y)
+            if plat.rect.top >= HEIGHT:
+                plat.kill()
+
+    plat_gen()
     displaysurface.fill((0, 0, 0))
-    P1.move()
 
     for entity in all_sprites:
         displaysurface.blit(entity.surf, entity.rect)
+        entity.move()
 
     pygame.display.update()
     FramePerSec.tick(FPS)
